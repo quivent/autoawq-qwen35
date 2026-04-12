@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 class Qwen3_5AWQForCausalLM(BaseAWQForCausalLM):
     layer_type = "Qwen3_5DecoderLayer"
     max_seq_len_key = "max_position_embeddings"
-    modules_to_not_convert = ["visual", "mtp"]
+    modules_to_not_convert = ["visual", "mtp", "in_proj_b", "in_proj_a"]
 
     @staticmethod
     def get_model_layers(model):
@@ -129,15 +129,15 @@ class Qwen3_5AWQForCausalLM(BaseAWQForCausalLM):
         elif hasattr(module, "linear_attn"):
             # === Linear attention (GDN/DeltaNet) layer ===
 
-            # Input layernorm -> all linear_attn input projections
+            # Input layernorm -> linear_attn input projections
+            # Note: in_proj_b and in_proj_a are excluded from quantization
+            # (48 out_features not divisible by pack_num=8), so exclude from scaling too
             layers.append(
                 dict(
                     prev_op=module.input_layernorm,
                     layers=[
                         module.linear_attn.in_proj_qkv,
                         module.linear_attn.in_proj_z,
-                        module.linear_attn.in_proj_b,
-                        module.linear_attn.in_proj_a,
                     ],
                     inp=input_feat["linear_attn.in_proj_qkv"],
                     module2inspect=module.linear_attn,
@@ -254,8 +254,6 @@ class Qwen3_5Fuser:
                 blocks.append(module)
 
         # Replace the correct attribute on the original model
-        # For CausalLM: model.model = LlamaLikeModel (text_model IS model.model)
-        # For ConditionalGeneration: model.model.language_model = LlamaLikeModel
         fused_model = LlamaLikeModel(
             self.config.vocab_size,
             blocks,

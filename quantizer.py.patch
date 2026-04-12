@@ -14,3 +14,11 @@
 +                self.module_kwargs["position_embeddings"] = _rotary_emb(
                      self.inps, self.module_kwargs["position_ids"]
                  )
+
+@@ -523,6 +528,9 @@
+
+         oc_batch_size = 256 if org_w_shape[0] % 256 == 0 else 64  # prevent OOM
++        if org_w_shape[0] % oc_batch_size != 0:
++            # Fall back for small layers (e.g. GDN in_proj_b with 48 out_features)
++            oc_batch_size = org_w_shape[0]
+         assert org_w_shape[0] % oc_batch_size == 0
