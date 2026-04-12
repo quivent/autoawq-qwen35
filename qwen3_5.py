@@ -236,9 +236,9 @@ class Qwen3_5Fuser:
                         norm_2=norm_2,
                         dev=device,
                         max_seq_len=self.config.max_position_embeddings,
-                        rope_theta=self.config.rope_parameters.get(
-                            "rope_theta", 10000.0
-                        ),
+                        rope_theta=(self.config.rope_parameters or {}).get(
+                            "rope_theta", getattr(self.config, "rope_theta", 10000.0)
+                        ) if self.config.rope_parameters else getattr(self.config, "rope_theta", 10000.0),
                         q_norm=module.self_attn.q_norm,
                         k_norm=module.self_attn.k_norm,
                         head_dim=getattr(
@@ -253,10 +253,17 @@ class Qwen3_5Fuser:
                 # Linear attention layer: cannot fuse, keep as-is
                 blocks.append(module)
 
-        self.text_model.model = LlamaLikeModel(
+        # Replace the correct attribute on the original model
+        # For CausalLM: model.model = LlamaLikeModel (text_model IS model.model)
+        # For ConditionalGeneration: model.model.language_model = LlamaLikeModel
+        fused_model = LlamaLikeModel(
             self.config.vocab_size,
             blocks,
             self.text_model.embed_tokens,
             self.text_model.norm,
         )
-        setattr(self.text_model.model, "blocks", self.text_model.model.blocks)
+        if hasattr(self.model.model, "language_model"):
+            self.model.model.language_model = fused_model
+        else:
+            self.model.model = fused_model
+        setattr(fused_model, "blocks", fused_model.blocks)

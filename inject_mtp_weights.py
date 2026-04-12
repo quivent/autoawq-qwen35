@@ -155,6 +155,32 @@ def inject_mtp_weights(source_path: str, quantized_path: str) -> None:
             f"Tensor mismatch for {key}"
         )
 
+    # Step 6: Update config.json with mtp_num_hidden_layers if missing
+    config_path = quant_path / "config.json"
+    if config_path.exists():
+        with open(config_path) as f:
+            config = json.load(f)
+
+        updated = False
+        # Check text_config (nested) and top-level
+        for cfg_key in ["text_config", None]:
+            target = config.get(cfg_key, config) if cfg_key else config
+            if isinstance(target, dict) and "mtp_num_hidden_layers" not in target:
+                # Read from source config
+                src_config_path = Path(source_path) / "config.json"
+                if src_config_path.exists():
+                    with open(src_config_path) as f:
+                        src_config = json.load(f)
+                    src_target = src_config.get(cfg_key, src_config) if cfg_key else src_config
+                    if isinstance(src_target, dict) and "mtp_num_hidden_layers" in src_target:
+                        target["mtp_num_hidden_layers"] = src_target["mtp_num_hidden_layers"]
+                        updated = True
+                        print(f"  Added mtp_num_hidden_layers={target['mtp_num_hidden_layers']} to config{f'.{cfg_key}' if cfg_key else ''}")
+
+        if updated:
+            with open(config_path, "w") as f:
+                json.dump(config, f, indent=2)
+
     print(f"\nDone! MTP weights successfully injected into {quantized_path}")
     print(f"The quantized model now has {len(mtp_tensors)} MTP tensors ready for vLLM speculative decoding.")
 
