@@ -1,0 +1,16 @@
+--- a/awq/quantize/quantizer.py
++++ b/awq/quantize/quantizer.py
+@@ -159,7 +159,12 @@
+             if (
+                 transformers.__version__ >= "4.48.0"
+                 and self.module_kwargs.get("position_embeddings") is None
+             ):
+-                self.module_kwargs["position_embeddings"] = self.model.model.rotary_emb(
++                # Support both standard path and nested language_model path (Qwen3.5)
++                if hasattr(self.model.model, "rotary_emb"):
++                    _rotary_emb = self.model.model.rotary_emb
++                else:
++                    _rotary_emb = self.model.model.language_model.rotary_emb
++                self.module_kwargs["position_embeddings"] = _rotary_emb(
+                     self.inps, self.module_kwargs["position_ids"]
+                 )

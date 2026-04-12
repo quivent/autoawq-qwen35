@@ -1,0 +1,8 @@
+--- a/awq/models/base.py
++++ b/awq/models/base.py
+@@ -91,6 +91,7 @@
+     "qwen2_vl": "AutoModelForVision2Seq",
+     "qwen2_5_vl": "AutoModelForVision2Seq",
+     "qwen2_5_omni": "AutoModelForTextToWaveform",
++    "qwen3_5": "AutoModelForVision2Seq",
+ }
